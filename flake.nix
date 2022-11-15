@@ -23,9 +23,10 @@
           sha256 = "0mx2bxgnxm3vz688268939xw90jqci7xn992kfpny74mjqwzir0d";
         };
 
-        localVersion = "-dev";
+        localVersion = "-development";
         modDirVersion = version + localVersion;
 
+        # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
         structuredExtraConfig = with pkgs.lib.kernel; {
           DEBUG_INFO = yes;
           DEBUG_FS = yes;
