@@ -4,17 +4,12 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     neovim-flake.url = "github:jordanisaacs/neovim-flake";
-    nixos-generators = {
-      url = "github:nix-community/nixos-generators";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs = {
     self,
     nixpkgs,
     neovim-flake,
-    nixos-generators,
   }: let
     system = "x86_64-linux";
 
@@ -288,53 +283,9 @@
           })
         ];
       };
-  in (let
+
     linuxPackages = pkgs.linuxDev;
     kernel = linuxPackages.kernel;
-
-    # config = {
-    #   config,
-    #   lib,
-    #   pkgs,
-    #   ...
-    # }: {
-    #   boot.kernelPackages = linuxPackages;
-    #   system.stateVersion = "21.11";
-    #   users.users.root = {
-    #     password = "hello";
-    #     # openssh.authorizedKeys.keys = [(builtins.readFile "/home/jd/.ssh/id_ed25519.pub")];
-    #   };
-    #   networking.firewall.enable = false;
-    #   services.openssh = {
-    #     enable = true;
-    #     # permitRootLogin = "prohibit-password";
-    #     # Allow password login, otherwise add an authorized keys
-    #     permitRootLogin = "yes";
-    #   };
-    # };
-    # sshQemu = pkgs.writeScriptBin "sshvm" ''
-    #   ssh root@127.0.0.1 -p $QSSH
-    # '';
-    # runQemu = pkgs.writeScriptBin "runvm" ''
-    #   sudo qemu-system-x86_64 \
-    #     -enable-kvm \
-    #     -m 2048 \
-    #     -nic user,model=virtio,hostfwd=tcp::''${QSSH}-:22 \
-    #     -drive file=nixos.qcow2,media=disk,if=virtio \
-    #     -monitor tcp:127.0.0.1:''${QMON},server,nowait \
-    #     -snapshot \
-    #     -display none \
-    #     -daemonize
-    # '';
-    # killQemu = pkgs.writeScriptBin "killvm" "echo 'system_powerdown' | nc 127.0.0.1 $QMON";
-    # scpMod = pkgs.writeScriptBin "scpmod" ''
-    #   nix build .#$1
-    #   cd $SRC_DIR/result
-    #   for x in $(find . -name '*.ko'); do
-    #     echo "Copying $x to VM"
-    #     scp -P $QSSH $x root@localhost:~/
-    #   done
-    # '';
 
     runQemuV2 = pkgs.writeScriptBin "runvm" ''
       sudo qemu-system-x86_64 \
@@ -396,7 +347,7 @@
 
       initrdBin = [pkgs.bash pkgs.busybox pkgs.kmod];
 
-      storePaths = []; #["/proc" "/sys"];
+      storePaths = [];
 
       initialRamdisk = pkgs.makeInitrdNG {
         compressor = "gzip";
@@ -413,6 +364,7 @@
           })
           config;
       };
+
       init = pkgs.writeScript "init" ''
         #!/bin/sh
 
@@ -444,33 +396,14 @@
   in {
     packages.${system} = {
       inherit initramfs kernel helloworld;
-
-      # qemu = nixos-generators.nixosGenerate {
-      #   system = "x86_64-linux";
-      #   modules = [
-      #     config
-      #   ];
-      #   format = "qcow";
-      # };
     };
 
     devShells.${system} = {
       default = pkgs.mkShell {
         inherit nativeBuildInputs;
-        # QMON = 7777;
-        # QSSH = 3333;
-        # SRC_DIR = ./.;
-        # KERNEL = kernel.dev;
-        # KERNEL_VERSION = kernel.modDirVersion;
-        # shellHook = ''
-        #   if [ ! -e nixos.qcow2 ]
-        #   then
-        #     nix build --impure .#qemu
-        #     cp ./result/nixos.qcow2 ./
-        #   fi
-        #   export SRC_DIR=$(pwd)
-        # '';
+        KERNEL = kernel.dev;
+        KERNEL_VERSION = kernel.modDirVersion;
       };
     };
-  });
+  };
 }
