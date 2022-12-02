@@ -12,6 +12,7 @@
     neovim-flake,
   }: let
     system = "x86_64-linux";
+    enableBPF = true;
 
     pkgs = let
       kernelArgs = with pkgs; rec {
@@ -27,67 +28,84 @@
         modDirVersion = version + localVersion;
 
         # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
-        structuredExtraConfig = with pkgs.lib.kernel; {
-          DEBUG_INFO = yes;
-          DEBUG_FS = yes;
-          DEBUG_KERNEL = yes;
-          DEBUG_MISC = yes;
-          DEBUG_BUGVERBOSE = yes;
-          DEBUG_BOOT_PARAMS = yes;
-          DEBUG_STACK_USAGE = yes;
-          DEBUG_SHIRQ = yes;
-          DEBUG_ATOMIC_SLEEP = yes;
+        structuredExtraConfig = with pkgs.lib.kernel;
+          {
+            DEBUG_INFO = yes;
+            DEBUG_FS = yes;
+            DEBUG_KERNEL = yes;
+            DEBUG_MISC = yes;
+            DEBUG_BUGVERBOSE = yes;
+            DEBUG_BOOT_PARAMS = yes;
+            DEBUG_STACK_USAGE = yes;
+            DEBUG_SHIRQ = yes;
+            DEBUG_ATOMIC_SLEEP = yes;
 
-          IKCONFIG = yes;
-          IKCONFIG_PROC = yes;
+            IKCONFIG = yes;
+            IKCONFIG_PROC = yes;
+            # Compile with headers
+            IKHEADERS = yes;
 
-          SLUB_DEBUG = yes;
-          DEBUG_MEMORY_INIT = yes;
-          KASAN = yes;
+            SLUB_DEBUG = yes;
+            DEBUG_MEMORY_INIT = yes;
+            KASAN = yes;
 
-          MAGIC_SYSRQ = yes;
+            # FRAME_WARN - warn at build time for stack frames larger tahn this.
 
-          LOCALVERSION = freeform localVersion;
+            MAGIC_SYSRQ = yes;
 
-          LOCK_STAT = yes;
-          PROVE_LOCKING = yes;
+            LOCALVERSION = freeform localVersion;
 
-          FTRACE = yes;
-          STACKTRACE = yes;
-          IRQSOFF_TRACER = yes;
+            LOCK_STAT = yes;
+            PROVE_LOCKING = yes;
 
-          KGDB = yes;
-          UBSAN = yes;
-          BUG_ON_DATA_CORRUPTION = yes;
-          SCHED_STACK_END_CHECK = yes;
-          UNWINDER_FRAME_POINTER = yes;
-          "64BIT" = yes;
+            FTRACE = yes;
+            STACKTRACE = yes;
+            IRQSOFF_TRACER = yes;
 
-          # initramfs/initrd support
-          BLK_DEV_INITRD = yes;
+            KGDB = yes;
+            UBSAN = yes;
+            BUG_ON_DATA_CORRUPTION = yes;
+            SCHED_STACK_END_CHECK = yes;
+            UNWINDER_FRAME_POINTER = yes;
+            "64BIT" = yes;
 
-          PRINTK = yes;
-          EARLY_PRINTK = yes;
+            # initramfs/initrd support
+            BLK_DEV_INITRD = yes;
 
-          # Support elf and #! scripts
-          BINFMT_ELF = yes;
-          BINFMT_SCRIPT = yes;
+            PRINTK = yes;
+            PRINTK_TIME = yes;
+            EARLY_PRINTK = yes;
 
-          # Create a tmpfs/ramfs early at bootup.
-          DEVTMPFS = yes;
-          DEVTMPFS_MOUNT = yes;
+            # Support elf and #! scripts
+            BINFMT_ELF = yes;
+            BINFMT_SCRIPT = yes;
 
-          TTY = yes;
-          SERIAL_8250 = yes;
-          SERIAL_8250_CONSOLE = yes;
+            # Create a tmpfs/ramfs early at bootup.
+            DEVTMPFS = yes;
+            DEVTMPFS_MOUNT = yes;
 
-          PROC_FS = yes;
-          SYSFS = yes;
+            TTY = yes;
+            SERIAL_8250 = yes;
+            SERIAL_8250_CONSOLE = yes;
 
-          MODULES = yes;
-          MODULE_UNLOAD = yes;
-          # FW_LOADER = yes;
-        };
+            PROC_FS = yes;
+            SYSFS = yes;
+
+            MODULES = yes;
+            MODULE_UNLOAD = yes;
+            # FW_LOADER = yes;
+          }
+          // (
+            if enableBPF
+            then {
+              BPF_SYSCALL = yes;
+              # Enable kprobes and kallsyms: https://www.kernel.org/doc/html/latest/trace/kprobes.html#configuring-kprobes
+              # Debug FS is be enabled (done above) to show registered kprobes in /sys/kernel/debug: https://www.kernel.org/doc/html/latest/trace/kprobes.html#the-kprobes-debugfs-interface
+              KPROBES = yes;
+              KALLSYMS_ALL = yes;
+            }
+            else {}
+          );
 
         # Flags that get passed to generate-config.pl
         generateConfigFlags = {
@@ -226,7 +244,7 @@
                     enable = true;
                     c_header = true;
                   };
-                  nix = true;
+                  nix.enable = true;
                 };
                 vim.statusline.lualine = {
                   enable = true;
@@ -291,6 +309,7 @@
     runQemuV2 = pkgs.writeScriptBin "runvm" ''
       sudo qemu-system-x86_64 \
         -enable-kvm \
+        -m 1G \
         -kernel ${kernel}/bzImage \
         -initrd ${initramfs}/initrd.gz \
         -nographic -append "console=ttyS0"
@@ -309,17 +328,23 @@
         neovimConfig
         gdb
         qemu
+        pahole
+
+        # static analysis
+        flawfinder
+        cppcheck
+        sparse
       ]
       ++ buildInputs;
 
-    helloworld =
-      pkgs.stdenv.mkDerivation
-      {
+    buildModule = {
+      name,
+      src,
+    }:
+      pkgs.stdenv.mkDerivation {
         KERNEL = kernel.dev;
         KERNEL_VERSION = kernel.modDirVersion;
-        name = "helloworld";
-        inherit buildInputs;
-        src = ./helloworld;
+        inherit buildInputs name src;
 
         installPhase = ''
           mkdir -p $out/lib/modules/$KERNEL_VERSION/misc
@@ -332,23 +357,76 @@
         meta.platforms = ["x86_64-linux"];
       };
 
+    helloworld = buildModule {
+      name = "helloworld";
+      src = ./helloworld;
+    };
+
+    ebpf_stacktrace = pkgs.stdenv.mkDerivation {
+      name = "ebpf_stacktrace";
+      src = ./ebpf_stacktrace;
+      installPhase = ''
+        runHook preInstall
+
+        mkdir $out
+        cp ./helloworld $out/
+        cp ./helloworld_dbg $out/
+        cp runit.sh $out/
+
+        runHook postInstall
+      '';
+      meta.platforms = ["x86_64-linux"];
+    };
+
     initramfs = let
       initrdBinEnv = pkgs.buildEnv {
         name = "initrd-emergency-env";
         paths = map pkgs.lib.getBin initrdBin;
         pathsToLink = ["/bin" "/sbin"];
+        postBuild = pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (n: v: "ln -s ${v} $out/bin/${n}") extraBin);
       };
 
-      config = {
-        "/bin" = "${initrdBinEnv}/bin";
-        "/sbin" = "${initrdBinEnv}/sbin";
-        "/init" = init;
-        "/modules" = "${helloworld}/lib/modules/${kernel.modDirVersion}/misc";
+      moduleEnv = pkgs.buildEnv {
+        name = "initrd-modules";
+        paths = [helloworld];
+        pathsToLink = ["/lib/modules/${kernel.modDirVersion}/misc"];
       };
+
+      config =
+        {
+          "/bin" = "${initrdBinEnv}/bin";
+          "/sbin" = "${initrdBinEnv}/sbin";
+          "/init" = init;
+          "/modules" = "${moduleEnv}/lib/modules/${kernel.modDirVersion}/misc";
+        }
+        // (
+          if enableBPF
+          then {
+            "/ebpf" = ebpf_stacktrace;
+          }
+          else {}
+        );
 
       initrdBin = [pkgs.bash pkgs.busybox pkgs.kmod];
+      extraBin =
+        {
+          strace = "${pkgs.strace}/bin/strace";
+        }
+        // (
+          if enableBPF
+          then {
+            stackcount = "${pkgs.bcc}/bin/stackcount";
+          }
+          else {}
+        );
 
-      storePaths = [];
+      storePaths =
+        [pkgs.foot.terminfo]
+        ++ (
+          if enableBPF
+          then [pkgs.bcc pkgs.python3]
+          else []
+        );
 
       initialRamdisk = pkgs.makeInitrdNG {
         compressor = "gzip";
@@ -375,6 +453,15 @@
         mkdir /sys
         mount -t proc none /proc
         mount -t sysfs none /sys
+        mount -t debugfs debugfs /sys/kernel/debug
+
+        mknod -m 666 /dev/null c 1 3
+        mknod -m 666 /dev/tty c 5 0
+        mknod -m 644 /dev/random c 1 8
+        mknod -m 644 /dev/urandom c 1 9
+
+        mkdir -p /run/booted-system/kernel-modules/lib/modules/${kernel.modDirVersion}/build
+        tar -xf /sys/kernel/kheaders.tar.xz -C /run/booted-system/kernel-modules/lib/modules/${kernel.modDirVersion}/build
 
         cat <<!
 
@@ -390,13 +477,15 @@
 
 
         !
-        exec /bin/sh
+
+        # Get a new session to allow for job control and ctrl-* support
+        exec setsid -c /bin/sh
       '';
     in
       initialRamdisk;
   in {
     packages.${system} = {
-      inherit initramfs kernel helloworld;
+      inherit initramfs kernel helloworld ebpf_stacktrace;
     };
 
     devShells.${system} = {
