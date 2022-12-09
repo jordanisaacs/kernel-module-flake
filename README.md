@@ -51,6 +51,10 @@ A neovim editor is provided that is set up for Nix and C (CCLS) with LSPs for bo
 
 If you have nix-direnv enabled a shell with everything you need should open when you `cd` into the directory after calling `direnv allow`
 
+### eBPF
+
+eBPF is enabled by default. This makes the initrd much larger and the compile time of the linux kernel longer. You can disable it by setting `enableBPF = false` in `flake.nix`.
+
 ### Modifying the flake
 
 The flake.nix is documented so it should be self explanatory for editing it to your needs. I will keep updating it with more features as I learn more about kernel development.
