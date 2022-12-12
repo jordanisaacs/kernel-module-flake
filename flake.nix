@@ -13,19 +13,20 @@
   }: let
     system = "x86_64-linux";
     enableBPF = true;
+    enableRust = true;
 
     pkgs = let
       kernelArgs = with pkgs; rec {
-        version = "6.0.8";
+        version = "6.1";
         # branchVersion needs to be x.y
         extraMeta.branch = lib.versions.majorMinor version;
         src = fetchurl {
           url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
-          sha256 = "0mx2bxgnxm3vz688268939xw90jqci7xn992kfpny74mjqwzir0d";
+          sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
         };
 
         localVersion = "-development";
-        modDirVersion = version + localVersion;
+        modDirVersion = version + ".0" + localVersion;
 
         # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
         structuredExtraConfig = with pkgs.lib.kernel;
@@ -172,6 +173,11 @@
             DEBUG=1 ARCH=$kernelArch KERNEL_CONFIG="$buildRoot/kernel-config" AUTO_MODULES=$autoModules \
               PREFER_BUILTIN=$preferBuiltin BUILD_ROOT="$buildRoot" SRC=. MAKE_FLAGS="$makeFlags" \
               perl -w $generateConfig
+
+            ${
+              # CONFIG_RUST is not an option in `make config` thus need to enable it manually by appending it to the config file
+              lib.optionalString enableRust ''echo -e "CONFIG_RUST=y\r\nCONFIG_RUST_DEBUG_ASSERTIONS=y\r\nCONFIG_RUST_OVERFLOW_CHECKS=y" >> $buildRoot/.config''
+            }
           '';
 
           installPhase = "mv $buildRoot/.config $out";
@@ -215,19 +221,112 @@
         };
       };
 
-      kernelPassthru = with pkgs; {
+      overrideKernel =
+        if enableRust
+        then
+          kernel.overrideAttrs (old: {
+            nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs; [rustc cargo rust-bindgen]);
+
+            RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
+
+            # Override install so we don't remove the rust directories
+            postInstall = ''
+              mkdir -p $dev
+              cp vmlinux $dev/
+              if [ -z "''${dontStrip-}" ]; then
+                installFlagsArray+=("INSTALL_MOD_STRIP=1")
+              fi
+              make modules_install $makeFlags "''${makeFlagsArray[@]}" \
+                $installFlags "''${installFlagsArray[@]}"
+              unlink $out/lib/modules/${kernelArgs.modDirVersion}/build
+              unlink $out/lib/modules/${kernelArgs.modDirVersion}/source
+
+              mkdir -p $dev/lib/modules/${kernelArgs.modDirVersion}/{build,source}
+
+              # To save space, exclude a bunch of unneeded stuff when copying.
+              (cd .. && rsync --archive --prune-empty-dirs \
+                  --exclude='/build/' \
+                  * $dev/lib/modules/${kernelArgs.modDirVersion}/source/)
+
+              cd $dev/lib/modules/${kernelArgs.modDirVersion}/source
+
+              cp -r $buildRoot/{.config,Module.symvers,rust} $dev/lib/modules/${kernelArgs.modDirVersion}/build
+
+              #mkdir -p $dev/lib/modules/${kernelArgs.modDirVersion}/build/rust
+              #cp $buildRoot/rust/target.json $dev/lib/modules/${kernelArgs.modDirVersion}/build/rust
+
+              make modules_prepare $makeFlags "''${makeFlagsArray[@]}" O=$dev/lib/modules/${kernelArgs.modDirVersion}/build
+
+              # For reproducibility, removes accidental leftovers from a `cc1` call
+              # from a `try-run` call from the Makefile
+              rm -f $dev/lib/modules/${kernelArgs.modDirVersion}/build/.[0-9]*.d
+
+              # Keep some extra files on some arches (powerpc, aarch64)
+              for f in arch/powerpc/lib/crtsavres.o arch/arm64/kernel/ftrace-mod.o; do
+                if [ -f "$buildRoot/$f" ]; then
+                  cp $buildRoot/$f $dev/lib/modules/${kernelArgs.modDirVersion}/build/$f
+                fi
+              done
+
+              # !!! No documentation on how much of the source tree must be kept
+              # If/when kernel builds fail due to missing files, you can add
+              # them here. Note that we may see packages requiring headers
+              # from drivers/ in the future; it adds 50M to keep all of its
+              # headers on 3.10 though.
+
+              chmod u+w -R ..
+
+              arch=$(cd $dev/lib/modules/${kernelArgs.modDirVersion}/build/arch; ls)
+              # Remove unused arches
+              for d in $(cd arch/; ls); do
+                if [ "$d" = "$arch" ]; then continue; fi
+                if [ "$arch" = arm64 ] && [ "$d" = arm ]; then continue; fi
+                rm -rf arch/$d
+              done
+
+              # Remove all driver-specific code (50M of which is headers)
+              rm -fR drivers
+
+              # Keep all headers
+              find .  -type f -name '*.h' -print0 | xargs -0 -r chmod u-w
+
+              # Keep linker scripts (they are required for out-of-tree modules on aarch64)
+              find .  -type f -name '*.lds' -print0 | xargs -0 -r chmod u-w
+
+              # Keep root and arch-specific Makefiles
+              chmod u-w Makefile arch/"$arch"/Makefile*
+
+              # Keep whole scripts dir
+              chmod u-w -R scripts
+
+              # Keep whole rust dir
+              chmod u-w -R rust
+
+              # Delete everything not kept
+              find . -type f -perm -u=w -print0 | xargs -0 -r rm
+
+              # Delete empty directories
+              find -empty -type d -delete
+
+              # Remove reference to kmod
+              sed -i Makefile -e 's|= ${pkgs.buildPackages.kmod}/bin/depmod|= depmod|'
+            '';
+          })
+        else kernel;
+
+      kernelPassthru = {
         inherit (kernelArgs) structuredExtraConfig modDirVersion configfile;
-        passthru = kernel.passthru // (removeAttrs kernelPassthru ["passthru"]);
+        passthru = overrideKernel.passthru // (removeAttrs kernelPassthru ["passthru"]);
       };
 
-      finalKernel = pkgs.lib.extendDerivation true kernelPassthru kernel;
+      finalKernel = pkgs.lib.extendDerivation true kernelPassthru overrideKernel;
     in
       import nixpkgs {
         inherit system;
         overlays = [
           neovim-flake.overlays.default
           (self: super: {
-            linuxDev = self.linuxPackagesFor kernel;
+            linuxDev = self.linuxPackagesFor finalKernel;
             busybox = super.busybox.override {
               enableStatic = true;
             };
@@ -315,12 +414,70 @@
         -nographic -append "console=ttyS0"
     '';
 
-    buildInputs = with pkgs; [
+    buildCInputs = with pkgs; [
       nukeReferences
       kernel.dev
     ];
 
-    nativeBuildInputs = with pkgs;
+    buildCModule = {
+      name,
+      src,
+    }:
+      pkgs.stdenv.mkDerivation {
+        KERNEL = kernel.dev;
+        KERNEL_VERSION = kernel.modDirVersion;
+        buildInputs = buildCInputs;
+        inherit name src;
+
+        installPhase = ''
+          mkdir -p $out/lib/modules/$KERNEL_VERSION/misc
+          for x in $(find . -name '*.ko'); do
+            nuke-refs $x
+            cp $x $out/lib/modules/$KERNEL_VERSION/misc/
+          done
+        '';
+
+        meta.platforms = ["x86_64-linux"];
+      };
+
+    buildRustInputs = with pkgs; [
+      nukeReferences
+      rustc
+      kernel.dev
+    ];
+
+    buildRustModule = {
+      name,
+      src,
+    }:
+      pkgs.stdenv.mkDerivation {
+        KERNEL = kernel.dev;
+        KERNEL_VERSION = kernel.modDirVersion;
+        buildInputs = buildRustInputs;
+        inherit name src;
+
+        installPhase = ''
+          mkdir -p $out/lib/modules/$KERNEL_VERSION/misc
+          for x in $(find . -name '*.ko'); do
+            nuke-refs $x
+            cp $x $out/lib/modules/$KERNEL_VERSION/misc/
+          done
+        '';
+
+        meta.platforms = ["x86_64-linux"];
+      };
+
+    helloworld = buildCModule {
+      name = "helloworld";
+      src = ./helloworld;
+    };
+
+    rustOutOfTree = buildRustModule {
+      name = "rust-out-of-tree";
+      src = ./rust;
+    };
+
+    shellInputs = with pkgs;
       [
         bear # for compile_commands.json, use bear -- make
         runQemuV2
@@ -334,32 +491,15 @@
         flawfinder
         cppcheck
         sparse
+        rustc
       ]
-      ++ buildInputs;
+      ++ lib.optional enableRust rustc;
 
-    buildModule = {
-      name,
-      src,
-    }:
-      pkgs.stdenv.mkDerivation {
-        KERNEL = kernel.dev;
-        KERNEL_VERSION = kernel.modDirVersion;
-        inherit buildInputs name src;
-
-        installPhase = ''
-          mkdir -p $out/lib/modules/$KERNEL_VERSION/misc
-          for x in $(find . -name '*.ko'); do
-            nuke-refs $x
-            cp $x $out/lib/modules/$KERNEL_VERSION/misc/
-          done
-        '';
-
-        meta.platforms = ["x86_64-linux"];
-      };
-
-    helloworld = buildModule {
-      name = "helloworld";
-      src = ./helloworld;
+    shellPkg = pkgs.mkShell {
+      nativeBuildInputs = shellInputs; #++ buildCInputs;
+      KERNEL = kernel.dev;
+      KERNEL_VERSION = kernel.modDirVersion;
+      RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
     };
 
     ebpf_stacktrace = pkgs.stdenv.mkDerivation {
@@ -388,7 +528,7 @@
 
       moduleEnv = pkgs.buildEnv {
         name = "initrd-modules";
-        paths = [helloworld];
+        paths = [helloworld rustOutOfTree];
         pathsToLink = ["/lib/modules/${kernel.modDirVersion}/misc"];
       };
 
@@ -485,15 +625,9 @@
       initialRamdisk;
   in {
     packages.${system} = {
-      inherit initramfs kernel helloworld ebpf_stacktrace;
+      inherit initramfs kernel helloworld ebpf_stacktrace rustOutOfTree;
     };
 
-    devShells.${system} = {
-      default = pkgs.mkShell {
-        inherit nativeBuildInputs;
-        KERNEL = kernel.dev;
-        KERNEL_VERSION = kernel.modDirVersion;
-      };
-    };
+    devShells.${system}.default = shellPkg;
   };
 }
