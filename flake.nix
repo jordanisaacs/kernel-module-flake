@@ -14,19 +14,34 @@
     system = "x86_64-linux";
     enableBPF = true;
     enableRust = true;
+    useRustForLinux = false;
 
     pkgs = let
       kernelArgs = with pkgs; rec {
         version = "6.1";
         # branchVersion needs to be x.y
         extraMeta.branch = lib.versions.majorMinor version;
-        src = fetchurl {
-          url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
-          sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
-        };
+        src =
+          if useRustForLinux
+          then
+            fetchurl {
+              url = "https://github.com/Rust-for-Linux/linux/archive/bd123471269354fdd504b65b1f1fe5167cb555fc.tar.gz";
+              sha256 = "sha256-BcTrK9tiGgCsmYaKpS/Xnj/nsCVGA2Aoa1AktHBgbB0=";
+            }
+          else
+            fetchurl {
+              url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
+              sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
+            };
 
         localVersion = "-development";
-        modDirVersion = version + ".0" + localVersion;
+        modDirVersion = let
+          appendV =
+            if useRustForLinux
+            then ".0-rc1"
+            else ".0";
+        in
+          version + appendV + localVersion;
 
         # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
         structuredExtraConfig = with pkgs.lib.kernel;
@@ -474,7 +489,10 @@
 
     rustOutOfTree = buildRustModule {
       name = "rust-out-of-tree";
-      src = ./rust;
+      src =
+        if useRustForLinux
+        then ./rfl_rust
+        else ./rust;
     };
 
     shellInputs = with pkgs;
@@ -528,7 +546,7 @@
 
       moduleEnv = pkgs.buildEnv {
         name = "initrd-modules";
-        paths = [helloworld rustOutOfTree];
+        paths = [helloworld] ++ pkgs.lib.optional enableRust rustOutOfTree;
         pathsToLink = ["/lib/modules/${kernel.modDirVersion}/misc"];
       };
 

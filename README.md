@@ -39,7 +39,15 @@ The initial ram disk is built using the new [make-initrd-ng](https://github.com/
 
 ### Kernel Module
 
-The kernel module is built using nix. You can build it manually with `nix build .#helloworld`. It is included in the initramfs.
+The kernel module is built using nix. You can build it manually with `nix build .#helloworld`. It is included in the initramfs. There is a `buildCModule` and `buildRustModule` function for building your own modules.
+
+### Rust Support
+
+Rust support is enabled by default using kernel version 6.1. You can disable Rust support and the kernel will build without it by setting `enableRust = false` in `flake.nix`. Note that you cannot do much with Rust in 6.1 so there is a second option to use Rust For Linux's branch. This is disabled by default and can be turn on by setting `useRustForLinux = true` in `flake.nix`. It will change from building the `rust/rust_out_of_tree.rs` module to the `rfl_rust/rust_out_of_tree.rs` by default.
+
+### eBPF Support
+
+eBPF is enabled by default. This makes the initrd much larger due to needing python for `bcc`, and the compile time of the linux kernel longer. You can disable it by setting `enableBPF = false` in `flake.nix`.
 
 ### Neovim Editor
 
@@ -51,9 +59,6 @@ A neovim editor is provided that is set up for Nix and C (CCLS) with LSPs for bo
 
 If you have nix-direnv enabled a shell with everything you need should open when you `cd` into the directory after calling `direnv allow`
 
-### eBPF
-
-eBPF is enabled by default. This makes the initrd much larger and the compile time of the linux kernel longer. You can disable it by setting `enableBPF = false` in `flake.nix`.
 
 ### Modifying the flake
 
