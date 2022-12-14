@@ -14,6 +14,7 @@
     system = "x86_64-linux";
     enableBPF = true;
     enableRust = true;
+    enableEditor = true;
     useRustForLinux = false;
 
     kernelWithRustInputs = old: old ++ (with pkgs; [rustc rustfmt cargo rust-bindgen]);
@@ -372,7 +373,15 @@
           busybox = super.busybox.override {
             enableStatic = true;
           };
-          neovimConfig = self.neovimBuilder {
+        })
+      ];
+    };
+
+    neovimPkg =
+      (neovim-flake.lib.neovimConfiguration {
+        inherit pkgs;
+        modules = [
+          {
             config = {
               vim.lsp = {
                 enable = true;
@@ -385,6 +394,7 @@
                   enable = true;
                   c_header = true;
                 };
+                rust.enable = enableRust;
                 nix.enable = true;
               };
               vim.statusline.lualine = {
@@ -439,10 +449,10 @@
               };
               vim.tabWidth = 8;
             };
-          };
-        })
-      ];
-    };
+          }
+        ];
+      })
+      .neovim;
 
     linuxPackages = pkgs.linuxDev;
     kernel = linuxPackages.kernel;
@@ -533,7 +543,6 @@
         bear # for compile_commands.json, use bear -- make
         runQemuV2
         git
-        neovimConfig
         gdb
         qemu
         pahole
@@ -544,7 +553,8 @@
         sparse
         rustc
       ]
-      ++ lib.optionals enableRust (buildRustInputs ++ [genRustAnalyzer]);
+      ++ lib.optional enableEditor neovimPkg
+      ++ lib.optionals enableRust (buildRustInputs ++ [cargo genRustAnalyzer]);
 
     shellPkg = pkgs.mkShell {
       nativeBuildInputs = shellInputs; #++ buildCInputs;

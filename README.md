@@ -51,9 +51,18 @@ eBPF is enabled by default. This makes the initrd much larger due to needing pyt
 
 ### Neovim Editor
 
-A neovim editor is provided that is set up for Nix and C (CCLS) with LSPs for both and autoformatting. See my [neovim-flake](https://github.com/jordanisaacs/neovim-flake) for more details. The clang-format was copied over from the linux source tree. To get CCLS working correctly call `bear -- make` to get a `compile_commands.json`.
+A neovim editor is provided that is set up for Nix, C (CCLS), and Rust (Rust-Analyzer). See my [neovim-flake](https://github.com/jordanisaacs/neovim-flake) for more details. It is enabled by default but can be disabled in `flake.nix` by setting `enableEditor = false`.
 
 ![editor preview](https://user-images.githubusercontent.com/19742638/201808644-68674027-277e-4d61-9ebe-e2197b570730.png)
+
+#### C
+
+Clang-format was copied over from the linux source tree. To get CCLS working correctly call `bear -- make` to get a `compile_commands.json`. Then open up the C files.
+
+#### Rust
+
+The flake is configured to build the kernel with a `rust-project.json` but it is not usable to out of tree modules. A script is run that parses the kernel's `rust-project.json` and generates one for the module itself. It is accessed with `make rust-analyzer`. Credit to thepacketgeek for the [script](https://github.com/Rust-for-Linux/rust-out-of-tree-module/pull/2).
+
 
 ### Direnv
 
