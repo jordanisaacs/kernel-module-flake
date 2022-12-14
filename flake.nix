@@ -16,130 +16,148 @@
     enableRust = true;
     useRustForLinux = false;
 
-    pkgs = let
-      kernelArgs = with pkgs; rec {
-        version = "6.1";
-        # branchVersion needs to be x.y
-        extraMeta.branch = lib.versions.majorMinor version;
-        src =
-          if useRustForLinux
-          then
-            fetchurl {
-              url = "https://github.com/Rust-for-Linux/linux/archive/bd123471269354fdd504b65b1f1fe5167cb555fc.tar.gz";
-              sha256 = "sha256-BcTrK9tiGgCsmYaKpS/Xnj/nsCVGA2Aoa1AktHBgbB0=";
-            }
-          else
-            fetchurl {
-              url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
-              sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
-            };
+    kernelWithRustInputs = old: old ++ (with pkgs; [rustc rustfmt cargo rust-bindgen]);
 
-        localVersion = "-development";
-        modDirVersion = let
-          appendV =
-            if useRustForLinux
-            then ".0-rc1"
-            else ".0";
-        in
-          version + appendV + localVersion;
-
-        # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
-        structuredExtraConfig = with pkgs.lib.kernel;
-          {
-            DEBUG_INFO = yes;
-            DEBUG_FS = yes;
-            DEBUG_KERNEL = yes;
-            DEBUG_MISC = yes;
-            DEBUG_BUGVERBOSE = yes;
-            DEBUG_BOOT_PARAMS = yes;
-            DEBUG_STACK_USAGE = yes;
-            DEBUG_SHIRQ = yes;
-            DEBUG_ATOMIC_SLEEP = yes;
-
-            IKCONFIG = yes;
-            IKCONFIG_PROC = yes;
-            # Compile with headers
-            IKHEADERS = yes;
-
-            SLUB_DEBUG = yes;
-            DEBUG_MEMORY_INIT = yes;
-            KASAN = yes;
-
-            # FRAME_WARN - warn at build time for stack frames larger tahn this.
-
-            MAGIC_SYSRQ = yes;
-
-            LOCALVERSION = freeform localVersion;
-
-            LOCK_STAT = yes;
-            PROVE_LOCKING = yes;
-
-            FTRACE = yes;
-            STACKTRACE = yes;
-            IRQSOFF_TRACER = yes;
-
-            KGDB = yes;
-            UBSAN = yes;
-            BUG_ON_DATA_CORRUPTION = yes;
-            SCHED_STACK_END_CHECK = yes;
-            UNWINDER_FRAME_POINTER = yes;
-            "64BIT" = yes;
-
-            # initramfs/initrd support
-            BLK_DEV_INITRD = yes;
-
-            PRINTK = yes;
-            PRINTK_TIME = yes;
-            EARLY_PRINTK = yes;
-
-            # Support elf and #! scripts
-            BINFMT_ELF = yes;
-            BINFMT_SCRIPT = yes;
-
-            # Create a tmpfs/ramfs early at bootup.
-            DEVTMPFS = yes;
-            DEVTMPFS_MOUNT = yes;
-
-            TTY = yes;
-            SERIAL_8250 = yes;
-            SERIAL_8250_CONSOLE = yes;
-
-            PROC_FS = yes;
-            SYSFS = yes;
-
-            MODULES = yes;
-            MODULE_UNLOAD = yes;
-            # FW_LOADER = yes;
+    kernelArgs = with pkgs; rec {
+      version = "6.1";
+      # branchVersion needs to be x.y
+      extraMeta.branch = lib.versions.majorMinor version;
+      src =
+        if useRustForLinux
+        then
+          fetchurl {
+            url = "https://github.com/Rust-for-Linux/linux/archive/bd123471269354fdd504b65b1f1fe5167cb555fc.tar.gz";
+            sha256 = "sha256-BcTrK9tiGgCsmYaKpS/Xnj/nsCVGA2Aoa1AktHBgbB0=";
           }
-          // (
-            if enableBPF
-            then {
-              BPF_SYSCALL = yes;
-              # Enable kprobes and kallsyms: https://www.kernel.org/doc/html/latest/trace/kprobes.html#configuring-kprobes
-              # Debug FS is be enabled (done above) to show registered kprobes in /sys/kernel/debug: https://www.kernel.org/doc/html/latest/trace/kprobes.html#the-kprobes-debugfs-interface
-              KPROBES = yes;
-              KALLSYMS_ALL = yes;
-            }
-            else {}
-          );
+        else
+          fetchurl {
+            url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
+            sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
+          };
 
-        # Flags that get passed to generate-config.pl
-        generateConfigFlags = {
-          # Ignores any config errors (eg unused config options)
-          ignoreConfigErrors = true;
-          # Build every available module
-          autoModules = false;
-          preferBuiltin = false;
-        };
+      kernelPatches = [
+        {
+          name = "bindgen-version-fix";
+          patch = ./patches/bindgen-libclang-version.patch;
+        }
+      ];
+
+      localVersion = "-development";
+      modDirVersion = let
+        appendV =
+          if useRustForLinux
+          then ".0-rc1"
+          else ".0";
+      in
+        version + appendV + localVersion;
+
+      # See https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/kernel_config.nix
+      structuredExtraConfig = with pkgs.lib.kernel;
+        {
+          DEBUG_FS = yes;
+          DEBUG_KERNEL = yes;
+          DEBUG_MISC = yes;
+          DEBUG_BUGVERBOSE = yes;
+          DEBUG_BOOT_PARAMS = yes;
+          DEBUG_STACK_USAGE = yes;
+          DEBUG_SHIRQ = yes;
+          DEBUG_ATOMIC_SLEEP = yes;
+
+          IKCONFIG = yes;
+          IKCONFIG_PROC = yes;
+          # Compile with headers
+          IKHEADERS = yes;
+
+          SLUB_DEBUG = yes;
+          DEBUG_MEMORY_INIT = yes;
+          KASAN = yes;
+
+          # FRAME_WARN - warn at build time for stack frames larger tahn this.
+
+          MAGIC_SYSRQ = yes;
+
+          LOCALVERSION = freeform localVersion;
+
+          LOCK_STAT = yes;
+          PROVE_LOCKING = yes;
+
+          FTRACE = yes;
+          STACKTRACE = yes;
+          IRQSOFF_TRACER = yes;
+
+          KGDB = yes;
+          UBSAN = yes;
+          BUG_ON_DATA_CORRUPTION = yes;
+          SCHED_STACK_END_CHECK = yes;
+          UNWINDER_FRAME_POINTER = yes;
+          "64BIT" = yes;
+
+          # initramfs/initrd support
+          BLK_DEV_INITRD = yes;
+
+          PRINTK = yes;
+          PRINTK_TIME = yes;
+          EARLY_PRINTK = yes;
+
+          # Support elf and #! scripts
+          BINFMT_ELF = yes;
+          BINFMT_SCRIPT = yes;
+
+          # Create a tmpfs/ramfs early at bootup.
+          DEVTMPFS = yes;
+          DEVTMPFS_MOUNT = yes;
+
+          TTY = yes;
+          SERIAL_8250 = yes;
+          SERIAL_8250_CONSOLE = yes;
+
+          PROC_FS = yes;
+          SYSFS = yes;
+
+          MODULES = yes;
+          MODULE_UNLOAD = yes;
+
+          # FW_LOADER = yes;
+        }
+        // (
+          if enableBPF
+          then {
+            BPF_SYSCALL = yes;
+            # Enable kprobes and kallsyms: https://www.kernel.org/doc/html/latest/trace/kprobes.html#configuring-kprobes
+            # Debug FS is be enabled (done above) to show registered kprobes in /sys/kernel/debug: https://www.kernel.org/doc/html/latest/trace/kprobes.html#the-kprobes-debugfs-interface
+            KPROBES = yes;
+            KALLSYMS_ALL = yes;
+          }
+          else {}
+        )
+        // (
+          if enableRust
+          then {
+            GCC_PLUGINS = no;
+            RUST = yes;
+            RUST_OVERFLOW_CHECKS = yes;
+            RUST_DEBUG_ASSERTIONS = yes;
+          }
+          else {}
+        );
+
+      # Flags that get passed to generate-config.pl
+      generateConfigFlags = {
+        # Ignores any config errors (eg unused config options)
+        ignoreConfigErrors = false;
+        # Build every available module
+        autoModules = false;
+        preferBuiltin = false;
       };
+    };
 
-      # Config file derivation
-      configfile = with pkgs;
-        stdenv.mkDerivation {
+    # Config file derivation
+    configfile = with pkgs;
+      stdenv.mkDerivation ({
           kernelArch = stdenv.hostPlatform.linuxArch;
           extraMakeFlags = [];
 
-          inherit (kernel) src patches version;
+          inherit (kernelPkg) src patches version;
           pname = "linux-config";
 
           inherit (kernelArgs.generateConfigFlags) autoModules preferBuiltin ignoreConfigErrors;
@@ -149,7 +167,12 @@
           passAsFile = ["kernelConfig"];
 
           depsBuildBuild = [buildPackages.stdenv.cc];
-          nativeBuildInputs = [perl gmp libmpc mpfr bison flex pahole];
+          nativeBuildInputs = let
+            i = [perl gmp libmpc mpfr bison flex pahole];
+          in
+            if enableRust
+            then kernelWithRustInputs i
+            else i;
 
           platformName = stdenv.hostPlatform.linux-kernel.name;
           # e.g. "bzImage"
@@ -175,7 +198,6 @@
             export HOSTAR=$AR_FOR_BUILD
             export HOSTLD=$LD_FOR_BUILD
             # Get a basic config file for later refinement with $generateConfig.
-            ls
             make $makeFlags \
               -C . O="$buildRoot" allnoconfig \
               HOSTCC=$HOSTCC HOSTCXX=$HOSTCXX HOSTAR=$HOSTAR HOSTLD=$HOSTLD \
@@ -188,11 +210,6 @@
             DEBUG=1 ARCH=$kernelArch KERNEL_CONFIG="$buildRoot/kernel-config" AUTO_MODULES=$autoModules \
               PREFER_BUILTIN=$preferBuiltin BUILD_ROOT="$buildRoot" SRC=. MAKE_FLAGS="$makeFlags" \
               perl -w $generateConfig
-
-            ${
-              # CONFIG_RUST is not an option in `make config` thus need to enable it manually by appending it to the config file
-              lib.optionalString enableRust ''echo -e "CONFIG_RUST=y\r\nCONFIG_RUST_DEBUG_ASSERTIONS=y\r\nCONFIG_RUST_OVERFLOW_CHECKS=y" >> $buildRoot/.config''
-            }
           '';
 
           installPhase = "mv $buildRoot/.config $out";
@@ -219,10 +236,18 @@
 
             structuredConfig = moduleStructuredConfig.settings;
           };
-        };
+        }
+        // (
+          if enableRust
+          then {
+            RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
+          }
+          else {}
+        ));
 
+    kernelPkg = let
       kernel = (pkgs.callPackage "${nixpkgs}/pkgs/os-specific/linux/kernel/manual-config.nix" {}) {
-        inherit (kernelArgs) src modDirVersion version;
+        inherit (kernelArgs) src modDirVersion version kernelPatches;
         inherit (pkgs) lib stdenv;
         inherit configfile;
 
@@ -240,11 +265,13 @@
         if enableRust
         then
           kernel.overrideAttrs (old: {
-            nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs; [rustc cargo rust-bindgen]);
+            nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs; [rustc cargo rust-bindgen pkg-config ncurses]);
 
             RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
 
-            # Override install so we don't remove the rust directories
+            # Override install:
+            # 1. Don't remove the rust directories
+            # 2. Install rust-analyzer support
             postInstall = ''
               mkdir -p $dev
               cp vmlinux $dev/
@@ -265,12 +292,10 @@
 
               cd $dev/lib/modules/${kernelArgs.modDirVersion}/source
 
-              cp -r $buildRoot/{.config,Module.symvers,rust} $dev/lib/modules/${kernelArgs.modDirVersion}/build
-
-              #mkdir -p $dev/lib/modules/${kernelArgs.modDirVersion}/build/rust
-              #cp $buildRoot/rust/target.json $dev/lib/modules/${kernelArgs.modDirVersion}/build/rust
+              cp $buildRoot/{.config,Module.symvers} $dev/lib/modules/${kernelArgs.modDirVersion}/build
 
               make modules_prepare $makeFlags "''${makeFlagsArray[@]}" O=$dev/lib/modules/${kernelArgs.modDirVersion}/build
+              make rust-analyzer $makeFlags "''${makeFlagsArray[@]}" O=$dev/lib/modules/${kernelArgs.modDirVersion}/build
 
               # For reproducibility, removes accidental leftovers from a `cc1` call
               # from a `try-run` call from the Makefile
@@ -336,86 +361,88 @@
 
       finalKernel = pkgs.lib.extendDerivation true kernelPassthru overrideKernel;
     in
-      import nixpkgs {
-        inherit system;
-        overlays = [
-          neovim-flake.overlays.default
-          (self: super: {
-            linuxDev = self.linuxPackagesFor finalKernel;
-            busybox = super.busybox.override {
-              enableStatic = true;
-            };
-            neovimConfig = self.neovimBuilder {
-              config = {
-                vim.lsp = {
+      finalKernel;
+
+    pkgs = import nixpkgs {
+      inherit system;
+      overlays = [
+        neovim-flake.overlays.default
+        (self: super: {
+          linuxDev = self.linuxPackagesFor kernelPkg;
+          busybox = super.busybox.override {
+            enableStatic = true;
+          };
+          neovimConfig = self.neovimBuilder {
+            config = {
+              vim.lsp = {
+                enable = true;
+                lightbulb.enable = true;
+                lspSignature.enable = true;
+                trouble.enable = true;
+                nvimCodeActionMenu.enable = true;
+                formatOnSave = true;
+                clang = {
                   enable = true;
-                  lightbulb.enable = true;
-                  lspSignature.enable = true;
-                  trouble.enable = true;
-                  nvimCodeActionMenu.enable = true;
-                  formatOnSave = true;
-                  clang = {
-                    enable = true;
-                    c_header = true;
-                  };
-                  nix.enable = true;
+                  c_header = true;
                 };
-                vim.statusline.lualine = {
-                  enable = true;
-                  theme = "onedark";
-                };
-                vim.visuals = {
-                  enable = true;
-                  nvimWebDevicons.enable = true;
-                  lspkind.enable = true;
-                  indentBlankline = {
-                    enable = true;
-                    fillChar = "";
-                    eolChar = "";
-                    showCurrContext = true;
-                  };
-                  cursorWordline = {
-                    enable = true;
-                    lineTimeout = 0;
-                  };
-                };
-                vim.theme = {
-                  enable = true;
-                  name = "onedark";
-                  style = "darker";
-                };
-                vim.autopairs.enable = true;
-                vim.autocomplete = {
-                  enable = true;
-                  type = "nvim-cmp";
-                };
-                vim.filetree.nvimTreeLua.enable = true;
-                vim.tabline.nvimBufferline.enable = true;
-                vim.telescope = {
-                  enable = true;
-                };
-                vim.markdown = {
-                  enable = true;
-                  glow.enable = true;
-                };
-                vim.treesitter = {
-                  enable = true;
-                  context.enable = true;
-                };
-                vim.keys = {
-                  enable = true;
-                  whichKey.enable = true;
-                };
-                vim.git = {
-                  enable = true;
-                  gitsigns.enable = true;
-                };
-                vim.tabWidth = 8;
+                nix.enable = true;
               };
+              vim.statusline.lualine = {
+                enable = true;
+                theme = "onedark";
+              };
+              vim.visuals = {
+                enable = true;
+                nvimWebDevicons.enable = true;
+                lspkind.enable = true;
+                indentBlankline = {
+                  enable = true;
+                  fillChar = "";
+                  eolChar = "";
+                  showCurrContext = true;
+                };
+                cursorWordline = {
+                  enable = true;
+                  lineTimeout = 0;
+                };
+              };
+              vim.theme = {
+                enable = true;
+                name = "onedark";
+                style = "darker";
+              };
+              vim.autopairs.enable = true;
+              vim.autocomplete = {
+                enable = true;
+                type = "nvim-cmp";
+              };
+              vim.filetree.nvimTreeLua.enable = true;
+              vim.tabline.nvimBufferline.enable = true;
+              vim.telescope = {
+                enable = true;
+              };
+              vim.markdown = {
+                enable = true;
+                glow.enable = true;
+              };
+              vim.treesitter = {
+                enable = true;
+                context.enable = true;
+              };
+              vim.keys = {
+                enable = true;
+                whichKey.enable = true;
+              };
+              vim.git = {
+                enable = true;
+                gitsigns.enable = true;
+              };
+              vim.tabWidth = 8;
             };
-          })
-        ];
-      };
+          };
+        })
+      ];
+    };
 
     linuxPackages = pkgs.linuxDev;
     kernel = linuxPackages.kernel;
@@ -495,6 +522,12 @@
         else ./rust;
     };
 
+    genRustAnalyzer =
+      pkgs.writers.writePython3Bin
+      "generate_rust_analyzer"
+      {}
+      (builtins.readFile ./scripts/generate_rust_analyzer.py);
+
     shellInputs = with pkgs;
       [
         bear # for compile_commands.json, use bear -- make
@@ -511,7 +544,7 @@
         sparse
         rustc
       ]
-      ++ lib.optional enableRust rustc;
+      ++ lib.optionals enableRust (buildRustInputs ++ [genRustAnalyzer]);
 
     shellPkg = pkgs.mkShell {
       nativeBuildInputs = shellInputs; #++ buildCInputs;
@@ -644,6 +677,7 @@
   in {
     packages.${system} = {
       inherit initramfs kernel helloworld ebpf_stacktrace rustOutOfTree;
+      kernelConfig = configfile;
     };
 
     devShells.${system}.default = shellPkg;

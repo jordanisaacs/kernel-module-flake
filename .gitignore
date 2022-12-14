@@ -11,8 +11,9 @@
 *.mod
 *.mod.*
 compile_commands.json
+rust-project.json
 
 .ccls-cache
 /.tmp
 result
-
+result-dev
