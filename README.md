@@ -37,13 +37,13 @@ A custom kernel is built according to Chris Done's [Build and run minimal Linux 
 
 The initial ram disk is built using the new [make-initrd-ng](https://github.com/NixOS/nixpkgs/tree/master/pkgs/build-support/kernel/make-initrd-ng). It is called through its [nix wrapper](https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/kernel/make-initrd-ng.nix) which safely copies the nix store packages needed over. Busybox is included and the helloworld kernel module.
 
-### Kernel Module
-
-The kernel module is built using nix. You can build it manually with `nix build .#helloworld`. It is included in the initramfs. There is a `buildCModule` and `buildRustModule` function for building your own modules.
-
 ### Rust Support
 
 Rust support is enabled by default using kernel version 6.1. You can disable Rust support and the kernel will build without it by setting `enableRust = false` in `flake.nix`. Note that you cannot do much with Rust in 6.1 so there is a second option to use Rust For Linux's branch. This is disabled by default and can be turn on by setting `useRustForLinux = true` in `flake.nix`. It will change from building the `rust/rust_out_of_tree.rs` module to the `rfl_rust/rust_out_of_tree.rs` by default.
+
+### Kernel Modules
+
+The kernel modules are built using nix. You can build them manually with `nix build .#helloworld` and `nix build .#rustOutOfTree`. They are copied into the initramfs for you. There is a `buildCModule` and `buildRustModule` function for building your own modules.
 
 ### eBPF Support
 
