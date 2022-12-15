@@ -26,10 +26,16 @@ def generate_rust_project(kdir, root_module):
         # Prepend kdir to existing root_module
         crate["root_module"] = os.path.join(kdir, crate["root_module"])
         if crate.get("source"):
-            for e_dir in crate["source"].get("exclude_dirs", []):
-                e_dir = os.path.join(kdir, e_dir)
-            for i_dir in crate["source"].get("incude_dirs", []):
-                i_dir = os.path.join(kdir, i_dir)
+            if "exclude_dirs" in crate["source"]:
+                crate["source"]["exclude_dirs"] = [
+                    os.path.join(kdir, e_dir)
+                    for e_dir in crate["source"]["exclude_dirs"]
+                ]
+            if "include_dirs" in crate["source"]:
+                crate["source"]["include_dirs"] = [
+                    os.path.join(kdir, i_dir)
+                    for i_dir in crate["source"]["include_dirs"]
+                ]
 
     # Finally, append this module as a crate
     rust_project["crates"].append(
