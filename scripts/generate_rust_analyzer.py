@@ -25,6 +25,12 @@ def generate_rust_project(kdir, root_module):
 
         # Prepend kdir to existing root_module
         crate["root_module"] = os.path.join(kdir, crate["root_module"])
+        if "proc_macro_dylib_path" in crate:
+            crate["proc_macro_dylib_path"] = os.path.join(
+                kdir, crate["proc_macro_dylib_path"]
+            )
+
+        crate["is_workspace_member"] = False
         if crate.get("source"):
             if "exclude_dirs" in crate["source"]:
                 crate["source"]["exclude_dirs"] = [
@@ -42,7 +48,7 @@ def generate_rust_project(kdir, root_module):
         {
             "display_name": root_module.removesuffix(".rs"),
             "root_module": root_module,
-            "is_workspace_member": False,
+            "is_workspace_member": True,
             "is_proc_macro": False,
             "deps": [
                 {"crate": index, "name": name}
