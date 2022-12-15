@@ -36,6 +36,7 @@
             sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
           };
 
+      # Add kernel patches here
       kernelPatches = [
         {
           name = "bindgen-version-fix";
@@ -394,7 +395,26 @@
                   enable = true;
                   c_header = true;
                 };
-                rust.enable = enableRust;
+                rust = {
+                  enable = enableRust;
+                  rustAnalyzerOpts = let
+                    cmd =
+                      pkgs.writeShellScript
+                      "module-ra-check"
+                      ''make -s "KRUSTFLAGS+=--error-format=json" 2>&1 | grep -v "^make"'';
+                  in ''
+                    ["rust-analyzer"] = {
+                      cargo = {
+                        buildScripts = {
+                          overrideCommand = {"${cmd}"},
+                        },
+                      },
+                      checkOnSave = {
+                        overrideCommand = {"${cmd}"},
+                      },
+                    },
+                  '';
+                };
                 nix.enable = true;
               };
               vim.statusline.lualine = {
@@ -554,7 +574,7 @@
         rustc
       ]
       ++ lib.optional enableEditor neovimPkg
-      ++ lib.optionals enableRust (buildRustInputs ++ [cargo genRustAnalyzer]);
+      ++ lib.optionals enableRust (buildRustInputs ++ [cargo rustfmt genRustAnalyzer]);
 
     shellPkg = pkgs.mkShell {
       nativeBuildInputs = shellInputs; #++ buildCInputs;
