@@ -11,7 +11,7 @@
   modules ? [],
   extraBin ? [],
   extraContent ? {},
-  storePaths ? {},
+  storePaths ? [],
 }: let
   busyboxStatic = busybox.override {enableStatic = true;};
 
