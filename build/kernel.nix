@@ -13,7 +13,7 @@
   modDirVersion,
   version,
   enableRust ? false,
-  kernelPatches ? {},
+  kernelPatches ? [],
   nixpkgs, # Nixpkgs source
 }: let
   baseKernel = (callPackage "${nixpkgs}/pkgs/os-specific/linux/kernel/manual-config.nix" {}) {
