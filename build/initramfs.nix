@@ -12,6 +12,7 @@
   extraBin ? [],
   extraContent ? {},
   storePaths ? [],
+  extraInit ? "",
 }: let
   busyboxStatic = busybox.override {enableStatic = true;};
 
@@ -74,6 +75,8 @@
 
     mkdir -p /run/booted-system/kernel-modules/lib/modules/${kernel.modDirVersion}/build
     tar -xf /sys/kernel/kheaders.tar.xz -C /run/booted-system/kernel-modules/lib/modules/${kernel.modDirVersion}/build
+
+    ${extraInit}
 
     cat <<!
 
