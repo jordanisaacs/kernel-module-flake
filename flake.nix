@@ -143,6 +143,10 @@
         RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
       };
   in {
+    lib = {
+      builders = import ./build/default.nix;
+    };
+
     packages.${system} = {
       inherit initramfs kernel cModule ebpf-stacktrace rustModule genRustAnalyzer;
       kernelConfig = configfile;
