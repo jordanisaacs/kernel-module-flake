@@ -20,7 +20,7 @@
   kernelConfig,
   generateConfigFlags,
   structuredExtraConfig,
-  enableRust ? true,
+  enableRust ? false,
 }: let
   nativeBuildInputs =
     [perl gmp libmpc mpfr bison flex]

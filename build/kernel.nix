@@ -12,7 +12,7 @@
   configfile,
   modDirVersion,
   version,
-  enableRust ? true,
+  enableRust ? false,
   kernelPatches ? {},
   nixpkgs, # Nixpkgs source
 }: let
