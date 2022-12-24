@@ -61,7 +61,7 @@ The `lib.builders` output of the flake exposes all the components as Nix builder
      self,
      nixpkgs,
      kernelFlake
-   }: let {
+   }: let
      system = "x86_64-system";
      pkgs = nixpkgs.legacyPackages.${system};
 
@@ -95,7 +95,6 @@ The `lib.builders` output of the flake exposes all the components as Nix builder
 
      runQemu = buildLib.buildQemuCmd {inherit kernel initramfs;};
      runGdb = buildLib.buildGdbCmd {inherit kernel;};
-   }
    in { };
 }
 ```
