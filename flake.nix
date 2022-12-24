@@ -30,7 +30,6 @@
     configfile = buildLib.buildKernelConfig {
       inherit
         (kernelConfig)
-        kernelConfig
         generateConfigFlags
         structuredExtraConfig
         enableRust

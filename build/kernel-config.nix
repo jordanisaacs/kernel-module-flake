@@ -17,7 +17,7 @@
 }: {
   nixpkgs,
   kernel,
-  kernelConfig,
+  # generate-config.pl flags. see below
   generateConfigFlags,
   structuredExtraConfig,
   enableRust ? false,
@@ -55,6 +55,10 @@ in
       inherit (kernel) src patches version;
       pname = "linux-config";
 
+      # Flags that get passed to generate-config.pl
+      # ignoreConfigErrors: Ignores any config errors in script (eg unused options)
+      # autoModules: Build every available module
+      # preferBuiltin: Build modules as builtin
       inherit (generateConfigFlags) autoModules preferBuiltin ignoreConfigErrors;
       generateConfig = "${nixpkgs}/pkgs/os-specific/linux/kernel/generate-config.pl";
 
