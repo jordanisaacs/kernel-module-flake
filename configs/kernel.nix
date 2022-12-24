@@ -2,13 +2,14 @@
   lib,
   enableRust,
   enableBPF,
+  enableGdb,
   useRustForLinux,
 }: let
   version = "6.1";
   localVersion = "-development";
 in {
   kernelArgs = {
-    inherit enableRust;
+    inherit enableRust enableGdb;
 
     inherit version;
     src =
@@ -125,6 +126,10 @@ in {
         RUST = yes;
         RUST_OVERFLOW_CHECKS = yes;
         RUST_DEBUG_ASSERTIONS = yes;
+      }
+      // lib.optionalAttrs enableGdb {
+        DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = yes;
+        GDB_SCRIPTS = yes;
       };
 
     # Flags that get passed to generate-config.pl

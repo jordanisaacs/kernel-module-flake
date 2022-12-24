@@ -18,11 +18,12 @@
     enableBPF = true;
     enableRust = true;
     enableEditor = true;
+    enableGdb = true;
     useRustForLinux = false;
 
     buildLib = pkgs.callPackage ./build {};
 
-    linuxConfigs = pkgs.callPackage ./configs/kernel.nix {inherit enableBPF enableRust useRustForLinux;};
+    linuxConfigs = pkgs.callPackage ./configs/kernel.nix {inherit enableBPF enableRust useRustForLinux enableGdb;};
     inherit (linuxConfigs) kernelArgs kernelConfig;
 
     # Config file derivation
@@ -45,8 +46,10 @@
         modDirVersion
         version
         enableRust
+        enableGdb
         kernelPatches
         ;
+
       inherit configfile nixpkgs;
     };
 
@@ -70,7 +73,8 @@
       storePaths = [pkgs.foot.terminfo] ++ pkgs.lib.optionals enableBPF [pkgs.bcc pkgs.python3];
     };
 
-    runQemu = buildLib.buildQemuCmd {inherit kernel initramfs;};
+    runQemu = buildLib.buildQemuCmd {inherit kernel initramfs enableGdb;};
+    runGdb = buildLib.buildGdbCmd {inherit kernel;};
 
     neovimPkg =
       (neovim-flake.lib.neovimConfiguration {
@@ -132,6 +136,7 @@
           sparse
           rustc
         ]
+        ++ lib.optional enableGdb runGdb
         ++ lib.optional enableEditor neovimPkg
         ++ lib.optionals enableRust [cargo rustfmt genRustAnalyzer];
       buildInputs = [pkgs.nukeReferences kernel.dev];

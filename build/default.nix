@@ -11,4 +11,5 @@
   buildKernel = pkgs.callPackage ./kernel.nix {};
 
   buildQemuCmd = pkgs.callPackage ./run-qemu.nix {};
+  buildGdbCmd = pkgs.callPackage ./run-gdb.nix {};
 }
