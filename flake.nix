@@ -58,10 +58,11 @@
     buildRustModule = buildLib.buildRustModule {inherit kernel;};
     buildCModule = buildLib.buildCModule {inherit kernel;};
 
-    initramfs = buildLib.buildInitramfs {
-      inherit kernel;
+    modules = [cModule] ++ pkgs.lib.optional enableRust rustModule;
 
-      modules = [cModule] ++ pkgs.lib.optional enableRust rustModule;
+    initramfs = buildLib.buildInitramfs {
+      inherit kernel modules;
+
       extraBin =
         {
           strace = "${pkgs.strace}/bin/strace";
@@ -73,7 +74,7 @@
     };
 
     runQemu = buildLib.buildQemuCmd {inherit kernel initramfs enableGdb;};
-    runGdb = buildLib.buildGdbCmd {inherit kernel;};
+    runGdb = buildLib.buildGdbCmd {inherit kernel modules;};
 
     neovimPkg =
       (neovim-flake.lib.neovimConfiguration {

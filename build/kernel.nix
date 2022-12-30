@@ -66,10 +66,10 @@
         ${lib.optionalString enableRust ''
           make rust-analyzer $makeFlags "''${makeFlagsArray[@]}" O=$dev/lib/modules/${modDirVersion}/build
         ''}
-        ${lib.optionalString enableGdb (builtins.trace enableGdb ''
+        ${lib.optionalString enableGdb ''
           echo "Make scripts"
           make scripts_gdb $makeFlags "''${makeFlagsArray[@]}" O=$dev/lib/modules/${modDirVersion}/build
-        '')}
+        ''}
 
         # For reproducibility, removes accidental leftovers from a `cc1` call
         # from a `try-run` call from the Makefile

@@ -38,6 +38,8 @@ runvm   # Calls QEMU with the necessary commands, uses sudo for enabling kvm
 #### C^A+X to exit
 #### In another terminal while the VM is running
 # rungdb                        # Connect to the VM with remote GDB debugging
+### (GDB)
+## lx-symbols-nix               # Runs lx-symbols with the nix store paths of the modules
 ####
 
 
@@ -85,16 +87,16 @@ The `lib.builders` output of the flake exposes all the components as Nix builder
        modDirVersion = "";
      };
 
-     initramfs = buildLib.buildInitramfs {
-       inherit kernel;
+     modules = [exampleModule];
 
-       modules = [exampleModule];
+     initramfs = buildLib.buildInitramfs {
+       inherit kernel modules;
      };
 
      exampleModule = buildCModule { name = "example-module"; src = ./.; };
 
      runQemu = buildLib.buildQemuCmd {inherit kernel initramfs;};
-     runGdb = buildLib.buildGdbCmd {inherit kernel;};
+     runGdb = buildLib.buildGdbCmd {inherit kernel modules;};
    in { };
 }
 ```
@@ -125,7 +127,7 @@ eBPF is enabled by default. This makes the initrd much larger due to needing pyt
 
 ### Remote GDB
 
-Remote GDB debugging is activated through the `rungdb` command (`build/run-gdb.nix`). It wraps GDB to provide the kernel source in the search path, loads `vmlinux`, sources the kernel gdb scripts, and then connects to the VM.
+Remote GDB debugging is activated through the `rungdb` command (`build/run-gdb.nix`). It wraps GDB to provide the kernel source in the search path, loads `vmlinux`, sources the kernel gdb scripts, and then connects to the VM. An alias is provided `lx-symbols-nix` that runs the `lx-symbols` command with all the provided modules' nix store paths as search directories.
 
 ### initramfs
 
