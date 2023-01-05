@@ -4,12 +4,13 @@
 }: {kernel}: {
   name,
   src,
+  dontStrip ? false,
 }:
 stdenv.mkDerivation {
   KERNEL = kernel.dev;
   KERNEL_VERSION = kernel.modDirVersion;
   buildInputs = [nukeReferences kernel.dev];
-  inherit name src;
+  inherit name src dontStrip;
 
   installPhase = ''
     mkdir -p $out/lib/modules/$KERNEL_VERSION/misc
