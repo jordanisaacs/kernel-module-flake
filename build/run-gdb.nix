@@ -12,12 +12,17 @@
     (m: "${m}/lib/modules/${kernel.modDirVersion}/misc")
     modules;
 
+  moduleSourceDirs =
+    builtins.map
+    (m: m.src)
+    modules;
+
   symbolsDirs =
     builtins.concatStringsSep
     " "
     moduleDirs;
 
-  searchDirs = builtins.concatStringsSep " " (builtins.map (m: ''-ex "dir ${m}"'') moduleDirs);
+  searchDirs = builtins.concatStringsSep " " (builtins.map (m: ''-ex "dir ${m}"'') moduleSourceDirs);
 in
   # Need a to go a directroy above source (eg. scripts) because vmlinux is using relative path
   writeScriptBin "rungdb" ''
