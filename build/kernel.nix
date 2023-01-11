@@ -1,5 +1,6 @@
 {
   stdenv,
+  ccacheStdenv,
   lib,
   callPackage,
   rustc,
@@ -14,6 +15,7 @@
   version,
   enableRust ? false, # Install the Rust Analyzer
   enableGdb ? false, # Install the GDB scripts
+  ccache ? {enable = false;}, # Enable ccache stdenv (must be enabled on system)
   kernelPatches ? [],
   nixpkgs, # Nixpkgs source
 }: let
@@ -21,7 +23,12 @@
     ((callPackage "${nixpkgs}/pkgs/os-specific/linux/kernel/manual-config.nix" {})
       {
         inherit src modDirVersion version kernelPatches configfile;
-        inherit lib stdenv;
+        inherit lib;
+
+        stdenv =
+          if ccache.enable
+          then ccacheStdenv
+          else stdenv;
 
         # Because allowedImportFromDerivation is not enabled,
         # the function cannot set anything based on the configfile. These settings do not
@@ -33,6 +40,11 @@
         };
       })
     .overrideAttrs (old: {
+      preConfigure = lib.optionalString ccache.enable ''
+        export CCACHE_DIR=${ccache.dir}
+        export CCACHE_UMASK=007
+      '';
+
       nativeBuildInputs =
         old.nativeBuildInputs
         ++ lib.optionals enableRust [rustc cargo rust-bindgen];

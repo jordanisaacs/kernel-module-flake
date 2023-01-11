@@ -20,6 +20,10 @@
     enableEditor = true;
     enableGdb = true;
     useRustForLinux = false;
+    ccache = {
+      enable = true;
+      dir = "/var/cache/ccache";
+    }; # First enable ccache on system
 
     buildLib = pkgs.callPackage ./build {};
 
@@ -49,7 +53,7 @@
         kernelPatches
         ;
 
-      inherit configfile nixpkgs;
+      inherit configfile nixpkgs ccache;
     };
 
     linuxDev = pkgs.linuxPackagesFor kernelDrv;
@@ -88,6 +92,7 @@
     cModule = buildCModule {
       name = "helloworld";
       src = ./modules/helloworld;
+      dontStrip = true;
     };
 
     rustModule = buildRustModule {
