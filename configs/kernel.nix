@@ -1,11 +1,12 @@
 {
-  lib,
+  pkgs,
+  lib ? pkgs.lib,
   enableRust,
   enableBPF,
   enableGdb,
   useRustForLinux,
 }: let
-  version = "6.1";
+  version = "6.1.4";
   localVersion = "-development";
 in {
   kernelArgs = {
@@ -20,25 +21,38 @@ in {
           sha256 = "sha256-BcTrK9tiGgCsmYaKpS/Xnj/nsCVGA2Aoa1AktHBgbB0=";
         }
       else
-        builtins.fetchurl {
+        pkgs.fetchurl {
           url = "mirror://kernel/linux/kernel/v6.x/linux-${version}.tar.xz";
-          sha256 = "sha256-LKHxcFGkMPb+0RluSVJxdQcXGs/ZfZZXchJQJwOyXes=";
+          sha256 = "sha256-iqj2T6YLsTOBqWCNH++90FVeKnDECyx9BnGw1kqkVZ4=";
         };
 
     # Add kernel patches here
-    kernelPatches = [
-      {
-        name = "bindgen-version-fix";
-        patch = ../patches/bindgen-libclang-version.patch;
-      }
-    ];
+    kernelPatches = let
+      fetchSet = lib.imap1 (i: hash: {
+        # name = " "kbuild-v${builtins.toString i}";
+        patch = pkgs.fetchpatch {
+          inherit hash;
+          url = "https://lore.kernel.org/rust-for-linux/20230109204520.539080-${builtins.toString i}-ojeda@kernel.org/raw";
+        };
+      });
+
+      patches = fetchSet [
+        "sha256-6WTde8P8GkDcBwVnlS6jws126vU7TCxF6/pLgFZE5gc="
+        "sha256-2RBeX5vFN88GVgRkzwK/7Gzl2iSWr4OqkdqoSgJPml0="
+        "sha256-oyR4traQbjq0+OMVL8q6UZicBh43TKN1BlhZsCTy7aU="
+        "sha256-2RBeX5vFN88GVgRkzwK/7Gzl2iSWr4OqkdqoSgJPml0="
+        "sha256-10NUX/GOPL/t4YCPP5D2iE6j44BJHfYB+62Hq9eXKmA="
+        "sha256-qOZaHfZMc7Y2A0LdDJDO3Zi7QbdsBxZZoPmYKahkznw="
+      ];
+    in
+      patches;
 
     inherit localVersion;
     modDirVersion = let
       appendV =
         if useRustForLinux
         then ".0-rc1"
-        else ".0";
+        else "";
     in
       version + appendV + localVersion;
   };
