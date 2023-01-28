@@ -9,7 +9,7 @@
 }: {
   kernel,
   modules ? [],
-  extraBin ? [],
+  extraBin ? {},
   extraContent ? {},
   storePaths ? [],
   extraInit ? "",
