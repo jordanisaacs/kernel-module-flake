@@ -41,7 +41,7 @@ in {
         "sha256-2RBeX5vFN88GVgRkzwK/7Gzl2iSWr4OqkdqoSgJPml0="
         "sha256-oyR4traQbjq0+OMVL8q6UZicBh43TKN1BlhZsCTy7aU="
         "sha256-2RBeX5vFN88GVgRkzwK/7Gzl2iSWr4OqkdqoSgJPml0="
-        "sha256-10NUX/GOPL/t4YCPP5D2iE6j44BJHfYB+62Hq9eXKmA="
+        "sha256-05VnWFMMar7YILTHVh9RLueRlW00pk3CjGKT7XDb7D0="
         "sha256-qOZaHfZMc7Y2A0LdDJDO3Zi7QbdsBxZZoPmYKahkznw="
       ];
     in
