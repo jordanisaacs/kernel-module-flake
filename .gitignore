@@ -17,3 +17,5 @@ rust-project.json
 /.tmp
 result
 result-dev
+
+.direnv
